@@ -1,0 +1,110 @@
+---
+title: "OUTCOME_DATA"
+author: "Jeffrey Wang"
+date: '2022-09-01'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(data.table)
+```
+
+```{r Dataframe Import}
+# HP Laptop
+# setwd("C:/Users/Jeffrey/OneDrive - Emory University")
+
+# Surface Laptop
+setwd("C:\\Users\\jeffr\\OneDrive - Emory University")
+
+device_raw <- fread("Databases\\Intermacs_2020a\\data\\Intermacs\\CSV_data\\device.csv",
+  select = c(
+ 'PUBLIC_ID', 'DEAD', 'TXPL', 
+ 'REC', #Explant for Recovery Indicator
+ 'EXPL', #Explant Indicator
+  'INT_DEAD',	'INT_TXPL',	'INT_REC',	'INT_EXPL'))
+  # Interval from Device Implant Until Event (should all be the same)
+
+events_raw <- fread("Databases\\Intermacs_2020a\\data\\Intermacs\\CSV_data\\events.csv",
+  select = c(
+ 'PUBLIC_ID', 'REHOSPITALIZATION',  'EVENTX', 'DEATH', 'INTOP1AE'))
+
+
+```
+
+```{r Device Database Cleaning}
+# Device Database Has:
+# Time from Implant -> Death/Heart_Txp/Recovery/Explant
+
+device <- device_raw %>%
+ distinct(PUBLIC_ID, .keep_all = TRUE)
+# TOTAL Sample Size n=22479 -- Correct
+```
+
+```{r Events Database Cleaning }
+# Events Database Has the following:
+# Hospital Readmission and Other SAEs
+# Neuro: Neuro Dysfunction, Psychiatric
+# CV: Arrhythmia, Hypertension, Myocardial Infarct, Pericardial Drainage
+  # RV Dysfunction 
+# Pump Related: Pump Thrombosis
+# Heme: Bleeding, Hemolysis,Arterial Clot, Venous Clot,
+# Renal: Renal Dysfunction
+# Other SAE, Wound Dehisc
+
+# Table of SAEs: 
+# table(events_raw$EVENTX)
+
+events <- events_raw %>%
+  filter(EVENTX == "Rehospitalization")
+  
+REHOSP <- aggregate(INTOP1AE ~ PUBLIC_ID, data = events, function(x) min(x))
+```
+
+```{r Merge Databases}
+# Code Below Will Now Create Database For The Following:
+# Time to 1st Re-Hospitalization
+# Time Variable: INTOP1AE
+# Event Variable: REHOSP
+
+# Time to Death
+# Time Variable: INT_DEAD
+# Event Variable: DEAD
+
+dat <- left_join(device, REHOSP)
+
+dat <- dat %>%
+  mutate(REHOSP = ifelse(INTOP1AE >= 0, 1, NA))
+
+dat$REHOSP[is.na(dat$REHOSP)] <- 0
+
+dat <- dat %>%
+  mutate(MORTALITY_1YEAR = ifelse(
+           INT_DEAD <= 12 & DEAD == 1, 1, 0)) %>%
+  mutate(MORTALITY_1YEAR = recode_factor(MORTALITY_1YEAR,
+           "1" = "DEAD_WITHIN_ONE_YEAR",
+           "0" = "ALIVE_WITHIN_ONE_YEAR")) %>%
+  mutate(READMISSION_30D = ifelse(
+           REHOSP == 1 & INTOP1AE <= 1, 1, 0)) %>%
+  mutate(READMISSION_30D = recode_factor(READMISSION_30D,
+           "1" = "READMITTED_WITHIN_30D",
+           "0" = "NOT_READMITTED_WITHIN_30D"))
+
+# Convert Column 2-11 in Outcomes Database into numeric
+# dat[2:11] <- lapply(dat[2:11], as.numeric)
+
+```
+
+```{r Export Database}
+# writexl::write_xlsx(dat, "C:\\Users\\Jeffrey\\OneDrive - Emory University\\Research Projects\\Morris - INTERMACS\\INTERMACS\\DATA\\OUTCOMES.xlsx")
+```
+
+```{r}
+saveRDS(dat, file = "C:\\Users\\jeffr\\OneDrive - Emory University\\Research Projects\\Morris - INTERMACS\\INTERMACS\\c_DATA\\OUTCOMES.RDS") 
+```
+

@@ -1,0 +1,124 @@
+---
+title: "INTERMACS_MV"
+author: "Jeffrey Wang"
+date: '2022-08-25'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r Loading Packages}
+library(data.table)
+library(dplyr)
+library(tidyr)
+```
+
+```{r Importing Patient and Followup Data}
+# HP Laptop
+# setwd("C:/Users/Jeffrey/OneDrive - Emory University")
+
+# Surface Laptop
+setwd("C:\\Users\\jeffr\\OneDrive - Emory University")
+
+psycho_raw <- fread("Databases\\Intermacs_2020a\\data\\Intermacs\\CSV_data\\patients.csv",
+  select = c(
+ # Demographics
+ 'PUBLIC_ID', 
+ 'CC_HIST_ALCOHOL_ABUSE_M', 'CC2_HIST_ALCOHOL_ABUSE_M', 
+ 'CC_HIST_DRUG_USE_M', 'CC2_HIST_DRUG_USE_M',
+ 'CC_LTD_COG_UNDERSTND_M', 'CC2_LTD_COG_UNDERSTND_M',
+ 'CC_LIMITED_SOCIAL_SUPPORT_M', 'CC2_LIMITED_SOCIAL_SUPPORT_M',
+ 'CC_OTH_MAJOR_PSYCH_DIAG_M', 'CC2_OTH_MAJOR_PSYCH_DIAG_M',
+ 'CC_SEVERE_DEPRESSION_M', 'CC2_SEVERE_DEPRESSION_M',
+ 'CC_RPTD_NON_COMPLIANCE_M', 'CC2_RPTD_NON_COMPLIANCE_M'))
+
+# Convert all "." to NA's
+psycho_raw[psycho_raw == "."] <- NA
+
+# Convert all NA's to 0
+# psycho_raw[is.na(psycho_raw)] <- 0
+
+psycho_raw$CC2_HIST_ALCOHOL_ABUSE_M <- as.numeric(psycho_raw$CC2_HIST_ALCOHOL_ABUSE_M)
+psycho_raw$CC2_HIST_DRUG_USE_M <- as.numeric(psycho_raw$CC2_HIST_DRUG_USE_M)
+psycho_raw$CC2_LTD_COG_UNDERSTND_M <- as.numeric(psycho_raw$CC2_LTD_COG_UNDERSTND_M)
+psycho_raw$CC2_LIMITED_SOCIAL_SUPPORT_M <- as.numeric(psycho_raw$CC2_LIMITED_SOCIAL_SUPPORT_M)
+psycho_raw$CC2_OTH_MAJOR_PSYCH_DIAG_M <- as.numeric(psycho_raw$CC2_OTH_MAJOR_PSYCH_DIAG_M)
+psycho_raw$CC2_SEVERE_DEPRESSION_M <- as.numeric(psycho_raw$CC2_SEVERE_DEPRESSION_M)
+psycho_raw$CC2_RPTD_NON_COMPLIANCE_M <- as.numeric(psycho_raw$CC2_RPTD_NON_COMPLIANCE_M)
+```
+
+```{r Cleaning Up Follow Up Dataframe}
+psycho <- psycho_raw %>%
+  
+# Combine the Two CC2 and CC Columns into 1
+  mutate(HIST_DRUG_USE = ifelse(
+    CC_HIST_DRUG_USE_M == 1 | CC2_HIST_DRUG_USE_M  == 1, 1, 0)) %>%
+  mutate(HIST_ALCOHOL_ABUSE = ifelse(
+    CC_HIST_ALCOHOL_ABUSE_M == 1 | CC2_HIST_ALCOHOL_ABUSE_M == 1, 1, 0)) %>%
+  mutate(LTD_COG_UNDERSTAND = ifelse(
+    CC_LTD_COG_UNDERSTND_M == 1 | CC2_LTD_COG_UNDERSTND_M == 1, 1, 0)) %>%
+  mutate(LIMITED_SOCIAL_SUPPORT = ifelse(
+    CC_LIMITED_SOCIAL_SUPPORT_M == 1 | CC2_LIMITED_SOCIAL_SUPPORT_M == 1, 1, 0)) %>%
+  mutate(OTH_MAJOR_PSYCH_DIAG = ifelse(
+    CC_OTH_MAJOR_PSYCH_DIAG_M == 1 | CC2_OTH_MAJOR_PSYCH_DIAG_M == 1, 1, 0)) %>%
+  mutate(SEVERE_DEPRESSION = ifelse(
+    CC_SEVERE_DEPRESSION_M == 1 | CC2_SEVERE_DEPRESSION_M == 1, 1, 0)) %>%
+  mutate(RPTD_NON_COMPLIANCE = ifelse(
+    CC_RPTD_NON_COMPLIANCE_M == 1 | CC2_RPTD_NON_COMPLIANCE_M == 1, 1, 0)) %>%
+    
+  mutate(SUB_ABUSE = ifelse(
+    HIST_DRUG_USE == 1 | HIST_ALCOHOL_ABUSE == 1, 1, 0)) %>%
+   # Combine Drug and EtOH Use into -> Substance Abuse
+  
+  mutate(MAJ_PSY = ifelse(
+    SEVERE_DEPRESSION == 1 | OTH_MAJOR_PSYCH_DIAG == 1, 1, 0)) %>%
+   # Combine Severe Depression and Major Psych disorder into major psych disorder
+  
+  mutate(PSY_RISK_NUMBER = 
+           SUB_ABUSE + 
+           MAJ_PSY + 
+           LTD_COG_UNDERSTAND + 
+           LIMITED_SOCIAL_SUPPORT + 
+           RPTD_NON_COMPLIANCE) %>%
+   # Count the number of major psychosocial risk factors (Possible 0 - 5)
+  
+  mutate(SUB_ABUSE_FACTOR = recode_factor(SUB_ABUSE,
+           "0" = "NO_SUB_ABUSE",
+           "1" = "SUB_ABUSE_PRESENT")) %>%
+  mutate(MAJ_PSY_FACTOR = recode_factor(MAJ_PSY,
+           "0" = "NO_MAJ_PSY",
+           "1" = "MAJ_PSY_PRESENT")) %>%
+  mutate(LTD_COG_UNDERSTAND_FACTOR = recode_factor(LTD_COG_UNDERSTAND,
+           "0" = "NO_LTD_COG_UNDERSTAND",
+           "1" = "LTD_COG_UNDERSTAND_PRESENT")) %>%
+  mutate(LIMITED_SOCIAL_SUPPORT_FACTOR = recode_factor(LIMITED_SOCIAL_SUPPORT,
+           "0" = "NO_LIMITED_SOCIAL_SUPPORT",
+           "1" = "LIMITED_SOCIAL_SUPPORT_PRESENT")) %>%
+  mutate(RPTD_NON_COMPLIANCE_FACTOR = recode_factor(RPTD_NON_COMPLIANCE,
+           "0" = "NO_RPTD_NON_COMPLIANCE",
+           "1" = "RPTD_NON_COMPLIANCE_PRESENT")) %>%
+  # Coding New Columns as factor 
+  
+  mutate(PSY_RISK_YN = ifelse(PSY_RISK_NUMBER == 0, 'No Psychosocial Risk', 'Psychosocial Risk'))
+   # Dichotomize to Present - Yes or No
+```
+
+```{r}
+psycho$LIMITED_SOCIAL_SUPPORT_FACTOR <- relevel(as.factor(psycho$LIMITED_SOCIAL_SUPPORT_FACTOR), "NO_LIMITED_SOCIAL_SUPPORT")
+psycho$SUB_ABUSE_FACTOR <- relevel(as.factor(psycho$SUB_ABUSE_FACTOR), "NO_SUB_ABUSE")
+psycho$LTD_COG_UNDERSTAND_FACTOR <- relevel(as.factor(psycho$LTD_COG_UNDERSTAND_FACTOR), "NO_LTD_COG_UNDERSTAND")
+psycho$MAJ_PSY_FACTOR <- relevel(as.factor(psycho$MAJ_PSY_FACTOR), "NO_MAJ_PSY")
+psycho$RPTD_NON_COMPLIANCE_FACTOR <- relevel(as.factor(psycho$RPTD_NON_COMPLIANCE_FACTOR), "NO_RPTD_NON_COMPLIANCE")
+# Relevel Reference as No for all 5x psycho Risk Factors
+```
+
+```{r}
+# writexl::write_xlsx(psycho, "C:\\Users\\Jeffrey\\OneDrive - Emory University\\Research Projects\\Morris - INTERMACS\\INTERMACS\\DATA\\PSYCHOSOCIAL_DATA.xlsx")
+```
+
+```{r}
+saveRDS(psycho, file = "C:\\Users\\jeffr\\OneDrive - Emory University\\Research Projects\\Morris - INTERMACS\\INTERMACS\\c_DATA\\PSYCHOSOCIAL_DATA.RDS") 
+```
+

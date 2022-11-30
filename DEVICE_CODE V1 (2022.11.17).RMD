@@ -1,0 +1,78 @@
+---
+title: "INTERMACS_MV"
+author: "Jeffrey Wang"
+date: '2022-08-25'
+output: html_document
+---
+
+```{r setup, echo=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+```{r Loading Packages, include=FALSE}
+library(data.table)
+library(dplyr)
+library(tidyr)
+```
+
+```{r Importing Patient and Followup Data, include=FALSE}
+# HP Laptop
+# setwd("C:/Users/Jeffrey/OneDrive - Emory University")
+
+# Surface Laptop
+setwd("C:\\Users\\jeffr\\OneDrive - Emory University")
+
+device_raw <- fread("Databases\\Intermacs_2020a\\data\\Intermacs\\CSV_data\\device.csv",
+  select = c(
+ # Demographics
+ 'PUBLIC_ID','LV_FLOW', 'DEVICE_TY', 'IMPL_YR', 
+ 'NYHA', 'SIX_MIN_WALK', 'SIX_MIN_WALK_I',
+ 'SEC_DGN_DIL_MYO_ISCHEMIC', 'SEC_DGN_DIL_MYO_POST_PART',
+ 'VOLUME_2014', 'VOLUME_2015', 'VOLUME_2016'))
+
+device_raw$VOLUME_2014 <- as.numeric(device_raw$VOLUME_2014)
+device_raw$VOLUME_2015 <- as.numeric(device_raw$VOLUME_2015)
+device_raw$VOLUME_2016 <- as.numeric(device_raw$VOLUME_2016)
+
+```
+
+```{r Device Types, include=FALSE}
+device <- device_raw %>%
+  mutate(LV_FLOW = recode_factor(LV_FLOW,
+           "1 Continuous Flow" = "CONTINUOUS_FLOW",
+           "2 Pulsatile" = "PULSATILE_FLOW")) %>%
+  mutate(DEVICE_TY = recode_factor(DEVICE_TY,
+           "1" = "LVAD",
+           "2" = "RVAD",
+           "3" = "BOTH_LVAD_RVAD",
+           "4" = "TOTAL_ARTIFICIAL_HEART")) %>%
+  mutate(VOLUME_MEAN = (VOLUME_2014 + VOLUME_2015 + VOLUME_2016)/3) %>%
+  mutate(VOLUME_MEAN_ROUNDED = round(VOLUME_MEAN, 0)) %>%
+  mutate(VOLUME_AVG_14_TO_16 = recode_factor(VOLUME_MEAN_ROUNDED, 
+           "1" = "1_10_(Very_LOW)",
+           "2" = "11_30_(LOW)",
+           "3" = "11_30_(LOW)",
+           "4" = "31_50_(MEDIUM)",
+           "5" = "GREATER_THAN_50_(HIGH)")) %>%
+
+# Source: https://pubmed.ncbi.nlm.nih.gov/28888521/
+# Cowger et al. Classification - Also they had data from INTERMACS (not in biolincc)
+  
+  mutate(NYHA = 
+           ifelse(NYHA == "1", "NYHA_CLASS_1",
+           ifelse(NYHA == "2", "NYHA_CLASS_2",
+           ifelse(NYHA == "3", "NYHA_CLASS_3",
+           ifelse(NYHA == "4", "NYHA_CLASS_4", "NYHA_UNKNOWN"))))) %>%
+  mutate(SIX_MIN_WALK_METER = as.numeric(device_raw$SIX_MIN_WALK)*0.3048) %>%
+  mutate(SIX_MWT_MORE_300M = 
+           ifelse(SIX_MIN_WALK_METER > 300, "6MWT_GREATER_300M", "6MWT_NOT_GREATER_300M")) %>%
+  
+  distinct(PUBLIC_ID, .keep_all = TRUE)
+```
+
+```{r}
+# writexl::write_xlsx(device, "C:\\Users\\jeffr\\OneDrive - Emory University\\Research Projects\\Morris - INTERMACS\\INTERMACS\\c_DATA\\DEVICE.xlsx")
+
+saveRDS(device, file = "C:\\Users\\jeffr\\OneDrive - Emory University\\Research Projects\\Morris - INTERMACS\\INTERMACS\\c_DATA\\DEVICE.RDS")
+```
+

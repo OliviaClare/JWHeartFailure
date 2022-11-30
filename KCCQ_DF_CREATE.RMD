@@ -1,0 +1,310 @@
+---
+title: "INTERMACS_MV"
+author: "Jeffrey Wang"
+date: '2022-08-25'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r Loading Packages}
+library(data.table)
+library(dplyr)
+library(tidyr)
+```
+
+```{r Importing Patient and Followup Data}
+# HP Laptop
+# setwd("C:/Users/Jeffrey/OneDrive - Emory University")
+
+# Surface Laptop
+setwd("C:\\Users\\jeffr\\OneDrive - Emory University")
+
+patient_raw <- fread("Databases\\Intermacs_2020a\\data\\Intermacs\\CSV_data\\patients.csv",
+  select = c(
+ # Demographics
+ 'PUBLIC_ID', 'AGE_DEIDENT','GENDER',
+ 'RACE_AM_IND', 'RACE_ASIAN', 'RACE_AF_AMER', 'RACE_PAC_ISLAND', 'RACE_WHITE', 'RACE_UNKNOWN', 'RACE_OTHER', 
+ 'MARITAL_STAT', 'EDUC_LEVEL', 'WORK_INCOME',
+ 'HGT_CM', 'WGT_KG',
+ 'DEVICE_STRATEGY',
+ 'CC2_HIST_ALCOHOL_ABUSE_M', 'CC2_HIST_DRUG_USE_M', 'CC2_LTD_COG_UNDERSTND_M', 'CC2_LIMITED_SOCIAL_SUPPORT_M', 'CC2_OTH_MAJOR_PSYCH_DIAG_M', 'CC2_SEVERE_DEPRESSION_M', 'CC2_RPTD_NON_COMPLIANCE_M'))
+
+# Followup Database: Importing Only Relevant Columns
+follow_raw <- fread("Databases\\Intermacs_2020a\\data\\Intermacs\\CSV_data\\followup.csv",
+  select = c(
+  # Demographics
+  'PUBLIC_ID', 'FORM_ID',
+  'KCCQ12PL', 'KCCQ12SF', 'KCCQ12QL', 'KCCQ12SL', 'KCCQ12'))
+  # PL = Phys Limitation / SF = Symptom Freq  / QL Qual of Life / SL Social Lim
+
+follow_raw[follow_raw == "."] <- NA
+# follow_raw$KCCQ12 <- as.numeric(follow_raw$KCCQ12)
+
+# colSums(is.na(follow_raw))
+# table(follow_raw$FORM_ID)
+```
+
+```{r Cleaning Up Patient Dataframe}
+# str(follow_raw$FORM_ID)
+```
+
+```{r Cleaning Up Follow Up Dataframe}
+follow <- follow_raw %>%
+  mutate(FORM_ID = recode_factor(FORM_ID,
+      '1' = "Patient",
+      '2' = "PreImplant",
+      '3' = "Implant",
+      '4' = "Implant Discharge",
+      '5' = "Blood and Tissue",
+      '6' = "TWO Week Followup",
+      '7' = "SIX Week Followup",
+      '8' = "NINE Month Followup",
+      '12' = "ONE Week Post_Implant",
+      '13' = "ONE Month Post_Implant",
+      '14' = "THREEMonthFollowup",
+      '15' = "SIXMonthFollowup",
+      '16' = "ONEYearFollowup",
+      '17' = "ONE HALF Year Followup",
+      '18' = "TWOYearFollowup",
+      '19' = "TWO HALF Year Followup",
+      '20' = "THREE Year Followup",
+      '21' = "THREE HALF Year Followup",
+      '22' = "FOUR Year Followup",
+      '23' = "FOUR HALF Year Followup",
+      '24' = "FIVE Year Followup",
+      '25' = "FIVE HALF Year Followup",
+      '26' = "SIX Year Followup",
+      '27' = "SIX HALF Year Followup",
+      '28' = "SEVEN Year Followup",
+      '29' = "SEVEN HALF Year Followup",
+      '30' = "EIGHT Year Followup",
+      '31' = "EIGHT HALF Year Followup",
+      '32' = "NINE Year Followup",
+      '33' = "NINE HALF Year Followup",
+      '34' = "TEN Year Followup")) %>%
+   filter(FORM_ID == "PreImplant" | 
+          FORM_ID == "THREEMonthFollowup"|
+          FORM_ID == "SIXMonthFollowup"|
+          FORM_ID == "ONEYearFollowup"|
+          FORM_ID == "TWOYearFollowup")
+```
+
+
+```{r Creating Total KCCQ Score Column}
+follow_tot <- follow[,c('PUBLIC_ID', 'FORM_ID', 'KCCQ12')]
+anchor <- follow[,c('PUBLIC_ID', 'FORM_ID')]
+anchor <- anchor %>%    
+    unite("PUBLIC_ID_FORM_ID", 
+          c("PUBLIC_ID", "FORM_ID"), 
+          sep = "_", 
+          remove = TRUE) %>%
+    distinct(PUBLIC_ID_FORM_ID, .keep_all = TRUE)
+# Anchor has 74763 
+
+follow_tot <- follow_tot %>%
+    unite("PUBLIC_ID_FORM_ID", 
+          c("PUBLIC_ID", "FORM_ID"), 
+          sep = "_", 
+          remove = TRUE) %>%
+    drop_na() %>%
+    distinct(PUBLIC_ID_FORM_ID, .keep_all = TRUE)
+  
+anchor <- left_join(anchor, follow_tot, by = "PUBLIC_ID_FORM_ID")
+```
+
+
+```{r Creating Total KCCQ PL Score Column}
+follow_pl <- follow[,c('PUBLIC_ID', 'FORM_ID', 'KCCQ12PL')]
+
+
+follow_pl <- follow_pl %>%
+    unite("PUBLIC_ID_FORM_ID", 
+          c("PUBLIC_ID", "FORM_ID"), 
+          sep = "_", 
+          remove = TRUE) %>%
+    drop_na() %>%
+    distinct(PUBLIC_ID_FORM_ID, .keep_all = TRUE)
+  
+anchor <- left_join(anchor, follow_pl, by = "PUBLIC_ID_FORM_ID")
+```
+
+```{r Creating Total KCCQ SF Score Column}
+follow_sf <- follow[,c('PUBLIC_ID', 'FORM_ID', 'KCCQ12SF')]
+
+
+follow_sf <- follow_sf %>%
+    unite("PUBLIC_ID_FORM_ID", 
+          c("PUBLIC_ID", "FORM_ID"), 
+          sep = "_", 
+          remove = TRUE) %>%
+    drop_na() %>%
+    distinct(PUBLIC_ID_FORM_ID, .keep_all = TRUE)
+  
+anchor <- left_join(anchor, follow_sf, by = "PUBLIC_ID_FORM_ID")
+```
+
+```{r Creating Total KCCQ QL Score Column}
+follow_ql <- follow[,c('PUBLIC_ID', 'FORM_ID', 'KCCQ12QL')]
+
+
+follow_ql <- follow_ql %>%
+    unite("PUBLIC_ID_FORM_ID", 
+          c("PUBLIC_ID", "FORM_ID"), 
+          sep = "_", 
+          remove = TRUE) %>%
+    drop_na() %>%
+    distinct(PUBLIC_ID_FORM_ID, .keep_all = TRUE)
+  
+anchor <- left_join(anchor, follow_ql, by = "PUBLIC_ID_FORM_ID")
+```
+
+```{r Creating Total KCCQ SL Score Column}
+follow_sl <- follow[,c('PUBLIC_ID', 'FORM_ID', 'KCCQ12SL')]
+
+
+follow_sl <- follow_sl %>%
+    unite("PUBLIC_ID_FORM_ID", 
+          c("PUBLIC_ID", "FORM_ID"), 
+          sep = "_", 
+          remove = TRUE) %>%
+    drop_na() %>%
+    distinct(PUBLIC_ID_FORM_ID, .keep_all = TRUE)
+  
+anchor <- left_join(anchor, follow_sl, by = "PUBLIC_ID_FORM_ID")
+```
+
+```{r Splitting Column Back into Patient ID and Form ID}
+
+anchor <- anchor %>%
+  separate(PUBLIC_ID_FORM_ID, c("PUBLIC_ID", "FORM_ID"), sep='_', remove=FALSE)
+
+```
+
+
+
+```{r}
+anchor_tot <- anchor[,c('PUBLIC_ID', "FORM_ID", 'KCCQ12')]
+anchor_pl <- anchor[,c('PUBLIC_ID', "FORM_ID", 'KCCQ12PL')]
+anchor_sf <- anchor[,c('PUBLIC_ID', "FORM_ID", 'KCCQ12SF')]
+anchor_ql <- anchor[,c('PUBLIC_ID', "FORM_ID", 'KCCQ12QL')]
+anchor_sl <- anchor[,c('PUBLIC_ID', "FORM_ID", 'KCCQ12SL')]
+```
+
+```{r KCCQ12 TOTAL Long to Wide }
+anchor_tot_l <- reshape2::dcast(anchor_tot, PUBLIC_ID ~ FORM_ID, value.var = "KCCQ12")
+
+anchor_tot_l <- anchor_tot_l %>% 
+  rename("PreImplant_KCCQ12" = "PreImplant",
+         "THREEMonthFollowup_KCCQ12" = "THREEMonthFollowup",
+         "SIXMonthFollowup_KCCQ12" = "SIXMonthFollowup",
+         "ONEYearFollowup_KCCQ12" = "ONEYearFollowup",
+         "TWOYearFollowup_KCCQ12" = "TWOYearFollowup",)
+```
+
+
+```{r KCCQ12 PL Long to Wide}
+anchor_pl_l <- reshape2::dcast(anchor_pl, PUBLIC_ID ~ FORM_ID, value.var = "KCCQ12PL")
+
+anchor_pl_l <- anchor_pl_l %>% 
+  rename("PreImplant_KCCQ12PL" = "PreImplant",
+         "THREEMonthFollowup_KCCQ12PL" = "THREEMonthFollowup",
+         "SIXMonthFollowup_KCCQ12PL" = "SIXMonthFollowup",
+         "ONEYearFollowup_KCCQ12PL" = "ONEYearFollowup",
+         "TWOYearFollowup_KCCQ12PL" = "TWOYearFollowup",)
+```
+
+```{r KCCQ12 SF Long to Wide}
+anchor_sf_l <- reshape2::dcast(anchor_sf, PUBLIC_ID ~ FORM_ID, value.var = "KCCQ12SF")
+
+anchor_sf_l <- anchor_sf_l %>% 
+  rename("PreImplant_KCCQ12SF" = "PreImplant",
+         "THREEMonthFollowup_KCCQ12SF" = "THREEMonthFollowup",
+         "SIXMonthFollowup_KCCQ12SF" = "SIXMonthFollowup",
+         "ONEYearFollowup_KCCQ12SF" = "ONEYearFollowup",
+         "TWOYearFollowup_KCCQ12SF" = "TWOYearFollowup",)
+```
+
+```{r KCCQ12 QL Long to Wide}
+anchor_ql_l <- reshape2::dcast(anchor_ql, PUBLIC_ID ~ FORM_ID, value.var = "KCCQ12QL")
+
+anchor_ql_l <- anchor_ql_l %>% 
+  rename("PreImplant_KCCQ12QL" = "PreImplant",
+         "THREEMonthFollowup_KCCQ12QL" = "THREEMonthFollowup",
+         "SIXMonthFollowup_KCCQ12QL" = "SIXMonthFollowup",
+         "ONEYearFollowup_KCCQ12QL" = "ONEYearFollowup",
+         "TWOYearFollowup_KCCQ12QL" = "TWOYearFollowup",)
+```
+
+```{r KCCQ12 SL Long to Wide}
+anchor_sl_l <- reshape2::dcast(anchor_sl, PUBLIC_ID ~ FORM_ID, value.var = "KCCQ12SL")
+
+anchor_sl_l <- anchor_sl_l %>% 
+  rename("PreImplant_KCCQ12SL" = "PreImplant",
+         "THREEMonthFollowup_KCCQ12SL" = "THREEMonthFollowup",
+         "SIXMonthFollowup_KCCQ12SL" = "SIXMonthFollowup",
+         "ONEYearFollowup_KCCQ12SL" = "ONEYearFollowup",
+         "TWOYearFollowup_KCCQ12SL" = "TWOYearFollowup",)
+```
+
+
+```{r Merging KCCQ Scores}
+
+dat <- left_join(anchor_tot_l, anchor_pl_l)
+dat <- left_join(dat, anchor_sf_l)
+dat <- left_join(dat, anchor_ql_l)
+dat <- left_join(dat, anchor_sl_l)
+
+dat[2:26] <- lapply(dat[2:26], as.numeric)
+
+dat <- dat %>%
+  mutate(KCCQ12_DELTA_1Y = ONEYearFollowup_KCCQ12 - PreImplant_KCCQ12) %>%
+  mutate(KCCQ12PL_DELTA_1Y = ONEYearFollowup_KCCQ12PL - PreImplant_KCCQ12PL) %>%
+  mutate(KCCQ12SF_DELTA_1Y = ONEYearFollowup_KCCQ12SF - PreImplant_KCCQ12PL) %>%
+  mutate(KCCQ12SL_DELTA_1Y = ONEYearFollowup_KCCQ12SL - PreImplant_KCCQ12PL) %>%
+  mutate(KCCQ12QL_DELTA_1Y = ONEYearFollowup_KCCQ12QL - PreImplant_KCCQ12PL) %>%
+  mutate(PERSISTENT_POOR_QOL = 
+           ifelse(PreImplant_KCCQ12 < 45 & ONEYearFollowup_KCCQ12 < 45, 1, 0)) %>%
+  mutate(PERSISTENT_POOR_QOL = recode_factor(PERSISTENT_POOR_QOL,
+     "1" = "QOL_PERSISTENTLY_POOR",
+     "0" = "QOL_NOT_PERSISTENTLY_POOR"))
+  
+# Coding the Missingness Status
+dat <- dat %>%  
+ mutate(MISSING_STATUS_BOTH = ifelse(PreImplant_KCCQ12 >= 0 & ONEYearFollowup_KCCQ12 >= 0,
+     "BOTH_PRESENT",
+     "MISSING")) %>%
+  mutate(MISSING_STATUS_PRE = ifelse(PreImplant_KCCQ12 >= 0, "PRE_IMPLANT_PRESENT", "MISSING")) %>%
+  mutate(MISSING_STATUS_ONE_YEAR = ifelse(ONEYearFollowup_KCCQ12 >= 0, "ONE_YEAR_PRESENT", "MISSING"))
+
+dat$MISSING_STATUS_BOTH[is.na(dat$MISSING_STATUS_BOTH)] <- "MISSING_ONE_OR_BOTH"
+dat$MISSING_STATUS_PRE[is.na(dat$MISSING_STATUS_PRE)] <- "PRE_IMPLANT_MISSING"
+dat$MISSING_STATUS_ONE_YEAR[is.na(dat$MISSING_STATUS_ONE_YEAR)] <- "ONE_YEAR_MISSING"
+
+dat <- dat %>%
+  mutate(MISSING_STATUS_OVERALL = 
+           ifelse(MISSING_STATUS_PRE == "PRE_IMPLANT_MISSING" & 
+                  MISSING_STATUS_ONE_YEAR == "ONE_YEAR_MISSING", 
+                  "BOTH_MISSING",
+           ifelse(MISSING_STATUS_PRE == "PRE_IMPLANT_PRESENT" & 
+                  MISSING_STATUS_ONE_YEAR == "ONE_YEAR_MISSING", 
+                  "BASELINE_KCCQ_ONLY",
+           ifelse(MISSING_STATUS_PRE == "PRE_IMPLANT_MISSING" & 
+                  MISSING_STATUS_ONE_YEAR == "ONE_YEAR_PRESENT", 
+                  "ONE_YEAR_KCCQ_ONLY",
+                  "BOTH_PRESENT"))))
+  
+# Make Referent Group - No Persistently Poor QOL
+dat$PERSISTENT_POOR_QOL <- relevel(dat$PERSISTENT_POOR_QOL, "QOL_NOT_PERSISTENTLY_POOR")
+  
+# writexl::write_xlsx(dat, "C:\\Users\\Jeffrey\\OneDrive - Emory University\\Research Projects\\Morris - INTERMACS\\INTERMACS\\DATA\\KCCQ_DATA.xlsx")
+
+```
+
+```{r}
+saveRDS(dat, file = "C:\\Users\\jeffr\\OneDrive - Emory University\\Research Projects\\Morris - INTERMACS\\INTERMACS\\c_DATA\\KCCQ_DATA.RDS") 
+```
+
+

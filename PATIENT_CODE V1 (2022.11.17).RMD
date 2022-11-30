@@ -1,0 +1,255 @@
+---
+title: "INTERMACS_MV"
+author: "Jeffrey Wang"
+date: '2022-08-25'
+output: html_document
+---
+
+```{r setup, echo=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+```{r Loading Packages, include=FALSE}
+library(data.table)
+library(dplyr)
+library(tidyr)
+```
+
+```{r Importing Patient and Followup Data, include=FALSE}
+# HP Laptop
+# setwd("C:/Users/Jeffrey/OneDrive - Emory University")
+
+# Surface Laptop
+setwd("C:\\Users\\jeffr\\OneDrive - Emory University")
+
+patient_raw <- fread("Databases\\Intermacs_2020a\\data\\Intermacs\\CSV_data\\patients.csv",
+  select = c(
+ # Demographics
+ 'PUBLIC_ID', 'AGE_DEIDENT','GENDER',
+ 'RACE_AM_IND', 'RACE_ASIAN', 'RACE_AF_AMER', 'RACE_PAC_ISLAND', 'RACE_WHITE', 'RACE_UNKNOWN', 'RACE_OTHER', 
+ 'MARITAL_STAT', 'EDUC_LEVEL', 'WORK_INCOME',
+ 'HGT_CM', 'WGT_KG',
+ 'PRIMARY_DGN',
+ 'CC_SEVERE_DIABETES_M', 'CC2_SEVERE_DIABETES_M',
+ 'CC_HIST_SMOKING_M', 'CC2_HIST_SMOKING_M',
+ 'CC_PULMONARY_HYPERTENSION_M', 'CC2_PULMONARY_HYPERTENSION_M',
+ 'CC_PERIPH_VASC_DISEASE_M', 'CC2_PERIPH_VASC_DISEASE_M',
+ 'ALBUMIN_G_DL', 'CREAT_MG_DL', 
+ 'IMPL_YR', 'DEVICE_STRATEGY', 'PX_PROFILE', 
+ 'MED_PRE_IMP_BETA_BLOCKERS',
+ 'MED_PRE_IMP_ANGIOSTENSIN', 'MED_PRE_IMP_ACE_INHIBITORS',
+ 'MED_PRE_IMP_ALDOSTERONE',
+ 'MED_PRE_IMP_LOOP_DIURETICS',
+ 'CURRENT_ICD',
+ 'IV_INO_THERAPY', 'EVENT_HOSP_IABP', 'EVENT_HOSP_ECMO', 'EVENT_HOSP_DIALYSIS', 'EVENT_HOSP_VENTILAT',
+ 'PREV_CARDIAC_OPER_NONE', 'CONCOM_SURG_RVAD_IMPLANT'))
+```
+
+```{r}
+patient_raw$AGE_DEIDENT <- as.numeric(patient_raw$AGE_DEIDENT)
+patient_raw$WGT_KG <- as.numeric(patient_raw$WGT_KG)
+patient_raw$HGT_CM <- as.numeric(patient_raw$HGT_CM)
+patient_raw$PX_PROFILE <- relevel(as.factor(patient_raw$PX_PROFILE), "13")
+patient_raw$CONCOM_SURG_RVAD_IMPLANT <- as.numeric(patient_raw$CONCOM_SURG_RVAD_IMPLANT)
+patient_raw$ALBUMIN_G_DL <- as.numeric(patient_raw$ALBUMIN_G_DL)
+patient_raw$CREAT_MG_DL <- as.numeric(patient_raw$CREAT_MG_DL)
+```
+
+```{r Clean Patient Dataframe, include=FALSE}
+patient <- patient_raw %>%
+  mutate(RACE = 
+          ifelse(RACE_AM_IND == "1", "AMERICAN_INDIAN",
+          ifelse(RACE_ASIAN == "1", "ASIAN",
+          ifelse(RACE_AF_AMER == "1", "BLACK", 
+          ifelse(RACE_PAC_ISLAND == "1", "PACIFIC_ISLANDER",
+          ifelse(RACE_WHITE == "1", "WHITE",
+          ifelse(RACE_OTHER == "1", "OTHER", "RACE_UNKNOWN"))))))) %>%
+  mutate(RACE_CAT = 
+           ifelse(RACE == "WHITE", "WHITE",
+           ifelse(RACE == "BLACK", "BLACK", "OTHER/UNKNOWN"))) %>%
+  mutate(MARITAL_STAT = recode_factor(MARITAL_STAT,
+          "1" = "SINGLE",
+          "2" = "MARRIED",
+          "3" = "DIVORCED/SEPARATED",
+          "4" = "WIDOWED",
+          "5" = "DOMESTIC_PARTNERS",
+          "998" = "UNKNOWN")) %>%
+  mutate(EDUC_LEVEL = recode_factor(EDUC_LEVEL,
+          "1" = "NONE",
+          "2" = "GRADE_SCHOOL (0-8)",
+          "3" = "HIGH_SCHOOL (9-12)",
+          "4" = "ATTENDED_COLLEGE_DNF",
+          "5" = "ASSOCIATE/BACHELORS",
+          "6" = "POST_COLLEGE_GRADUATE_DEGREE",
+          "996" = "NOT_APPLICABLE",
+          "998" = "UNKNOWN")) %>%
+  mutate(WORK_INCOME = recode_factor(WORK_INCOME,
+          "Y" = "WORKING_FOR_INCOME",
+          "N" = "DOES_NOT_WORK_FOR_INCOME",
+          "U" = "UNKNOWN")) %>%
+  mutate(DEVICE_STRATEGY = recode_factor(DEVICE_STRATEGY,
+          "1" = "BRIDGE_TO_RECOVERY",
+          "2" = "BRIDGE_TO_TRANSPLANT",
+          "3" = "POSSIBLE_BTT_VERY_LIKELY",
+          "4" = "POSSIBLE_BTT_MODERATELY_LIKELY",
+          "5" = "POSSIBLE_BTT_UNLIKELY",
+          "6" = "DESTINATION_THERAPY",
+          "7" = "RESCUE_THERAPY",
+          "999" = "OTHER")) %>%
+  mutate(DEVICE_STRATEGY = recode_factor(DEVICE_STRATEGY,
+          "BRIDGE_TO_TRANSPLANT" = "BRIDGE_TO_TRANSPLANT",
+          "POSSIBLE_BTT_VERY_LIKELY" = "BRIDGE_TO_TRANSPLANT",
+          "POSSIBLE_BTT_MODERATELY_LIKELY" = "BRIDGE_TO_TRANSPLANT",
+          "POSSIBLE_BTT_UNLIKELY" = "BRIDGE_TO_TRANSPLANT",
+          "DESTINATION_THERAPY" = "DESTINATION_THERAPY",
+          "RESCUE_THERAPY" = "OTHER",
+          "BRIDGE_TO_RECOVERY" = "OTHER",
+          "OTHER" = "OTHER")) %>%
+  mutate(PX_PROFILE = recode_factor(PX_PROFILE,
+          "1" = "INTERMACS_PROFILE_1",
+          "3" = "INTERMACS_PROFILE_2",
+          "5" = "INTERMACS_PROFILE_3",
+          "7" = "INTERMACS_PROFILE_4",
+          "9" = "INTERMACS_PROFILE_5",
+          "11" = "INTERMACS_PROFILE_6",
+          "13" = "INTERMACS_PROFILE_7")) %>%
+  mutate(PX_PROFILE = recode_factor(PX_PROFILE,
+          "INTERMACS_PROFILE_1" = "INTERMACS_PROFILE_1",
+          "INTERMACS_PROFILE_2" = "INTERMACS_PROFILE_2",
+          "INTERMACS_PROFILE_3" = "INTERMACS_PROFILE_3",
+          "INTERMACS_PROFILE_4" = "INTERMACS_PROFILE_4_THRU_7",
+          "INTERMACS_PROFILE_5" = "INTERMACS_PROFILE_4_THRU_7",
+          "INTERMACS_PROFILE_6" = "INTERMACS_PROFILE_4_THRU_7",
+          "INTERMACS_PROFILE_7" = "INTERMACS_PROFILE_4_THRU_7")) %>%
+  mutate(CONCOM_SURG_RVAD_IMPLANT = recode_factor(CONCOM_SURG_RVAD_IMPLANT,
+          "1" = "CONCOMITANT_RVAD_SURGERY",
+          "0" = "NO_CONCOMITANT_RVAD_SURGERY")) %>%
+  mutate(BMI = ((WGT_KG)/(HGT_CM/100)^2)) %>%
+  mutate(PREV_CARDIAC_OPER_NONE = recode_factor(PREV_CARDIAC_OPER_NONE,
+          "1" = "NO_PREVIOUS_CARDIAC_SURGERY",
+          "0" = "PATIENT_HAD_PREVIOUS_CARDIAC_SURG")) %>%
+  mutate(EVENT_HOSP_VENTILAT = recode_factor(EVENT_HOSP_VENTILAT,
+          "1" = "YES_MECH_VENT_DURING_HOSP",
+          "0" = "NO_MECH_VENT_DURING_HOSP")) %>%
+  mutate(IV_INO_THERAPY = recode_factor(IV_INO_THERAPY,
+          "N" = "NO_IV_INOTROPES_PREIMPLANT",
+          "Y" = "YES_IV_INOTROPES_PREIMPLANT",
+          "U" = "UNKNOWN_IV_INOTROPES_PREIMPLANT")) %>%
+  mutate(EVENT_HOSP_IABP = recode_factor(EVENT_HOSP_IABP,
+          "0" = "NO_IABP_PREIMPLANT",
+          "1" = "YES_IABP_PREIMPLANT")) %>%
+  mutate(EVENT_HOSP_ECMO = recode_factor(EVENT_HOSP_ECMO,
+          "0" = "NO_ECMO_PREIMPLANT",
+          "1" = "YES_ECMO_PREIMPLANT")) %>%
+  mutate(EVENT_HOSP_DIALYSIS = recode_factor(EVENT_HOSP_DIALYSIS,
+          "0" = "NO_DIALYSIS_DURING_HOSP",
+          "1" = "YES_DIALYSIS_DURING_HOSP")) %>%
+  mutate(PRIMARY_DGN = 
+          ifelse(PRIMARY_DGN == 8, "Ischemic", "Other")) %>%
+
+  # For PRIMARY_DGN Coding - See chunk below for data dictionary
+
+  mutate(SEVERE_DIABETES = ifelse(CC_SEVERE_DIABETES_M == "1" | CC2_SEVERE_DIABETES_M == "1", 1, 0)) %>%
+  mutate(SEVERE_DIABETES = recode_factor(SEVERE_DIABETES,
+          "0" = "NO_SEVERE_DIABETES",
+          "1" = "YES_SEVERE_DIABETES")) %>%
+  mutate(SMOKING_HISTORY = ifelse(CC_HIST_SMOKING_M == "1" | CC2_HIST_SMOKING_M == "1", 1, 0)) %>%
+  mutate(SMOKING_HISTORY = recode_factor(SMOKING_HISTORY,
+          "0" = "NO_SMOKING_HISTORY",
+          "1" = "YES_SMOKING_HISTORY")) %>%
+  mutate(PULM_HTN = ifelse(CC_PULMONARY_HYPERTENSION_M == "1" | CC2_PULMONARY_HYPERTENSION_M == "1", 1, 0)) %>%
+  mutate(PULM_HTN = recode_factor(PULM_HTN,
+          "0" = "NO_PULM_HTN_PRE_IMPLANT",
+          "1" = "YES_PULM_HTN_PRE_IMPLANT")) %>%
+  mutate(PERIPH_VASE_DZ = ifelse(CC_PERIPH_VASC_DISEASE_M == "1" | CC2_PERIPH_VASC_DISEASE_M == "1", 1, 0)) %>%
+  mutate(PERIPH_VASE_DZ = recode_factor(PERIPH_VASE_DZ,
+          "0" = "NO_PERIPH_VASC_DZ_HX",
+          "1" = "YES_PERIPH_VASC_DZ_HX")) %>%
+  mutate(MED_PRE_IMP_BETA_BLOCKERS = recode_factor(MED_PRE_IMP_BETA_BLOCKERS,
+          "1" = "YES_PRE_IMP_BETA_BLOCK",
+          "2" = "NO_PRE_IMP_BETA_BLOCK",
+          "3" = "NO_PRE_IMP_BETA_BLOCK",
+          "4" = "UNK_PRE_IMP_BETA_BLOCK")) %>%
+
+  # Medications Data Dictionary
+  # 1 = currently using
+  # 2 = Previous use (within last year)
+  # 3 = No
+  # 4 = Unknown 
+
+  mutate(MED_PRE_IMP_ANGIOSTENSIN = recode_factor(MED_PRE_IMP_ANGIOSTENSIN,
+          "1" = "YES_PRE_IMP_ARB",
+          "2" = "NO_PRE_IMP_ARB",
+          "3" = "NO_PRE_IMP_ARB",
+          "4" = "UNK_PRE_IMP_ARB")) %>%
+  mutate(MED_PRE_IMP_ACE_INHIBITORS = recode_factor(MED_PRE_IMP_ACE_INHIBITORS,
+          "1" = "YES_PRE_IMP_ACE_I",
+          "2" = "NO_PRE_IMP_ACE_I",
+          "3" = "NO_PRE_IMP_ACE_I",
+          "4" = "UNK_PRE_IMP_BETA_BLOCK")) %>%
+  mutate(MED_PRE_IMP_ALDOSTERONE = recode_factor(MED_PRE_IMP_ALDOSTERONE,
+          "1" = "YES_PRE_IMP_MRA",
+          "2" = "NO_PRE_IMP_MRA",
+          "3" = "NO_PRE_IMP_MRA",
+          "4" = "UNK_PRE_IMP_MRA")) %>%
+  mutate(MED_PRE_IMP_ALDOSTERONE = recode_factor(MED_PRE_IMP_ALDOSTERONE,
+          "Y" = "YES_PRE_IMP_LOOP_DIUR",
+          "N" = "NO_PRE_LOOP_DIUR",
+          "U" = "UNK_PRE_LOOP_DIUR")) %>%
+
+  mutate(CURRENT_ICD = recode_factor(CURRENT_ICD,
+          "Y" = "YES_PRE_IMP_ICD",
+          "N" = "NO_PRE_ICD",
+          "U" = "UNK_PRE_ICD")) %>%
+  
+   dplyr::select(-c(RACE_AM_IND, RACE_ASIAN, RACE_AF_AMER, RACE_PAC_ISLAND, RACE_WHITE, RACE_OTHER, RACE_UNKNOWN, CC_SEVERE_DIABETES_M, CC2_SEVERE_DIABETES_M, CC_HIST_SMOKING_M, CC2_HIST_SMOKING_M, CC_PULMONARY_HYPERTENSION_M, CC2_PULMONARY_HYPERTENSION_M, CC_PERIPH_VASC_DISEASE_M, CC2_PERIPH_VASC_DISEASE_M))
+```
+
+```{r}
+# writexl::write_xlsx(patient, "C:\\Users\\jeffr\\OneDrive - Emory University\\Research Projects\\Morris - INTERMACS\\INTERMACS\\c_DATA\\PATIENT.xlsx")
+
+saveRDS(patient, file = "C:\\Users\\jeffr\\OneDrive - Emory University\\Research Projects\\Morris - INTERMACS\\INTERMACS\\c_DATA\\PATIENT.RDS")
+```
+
+```{r Primary Diagnosis Codes, include=FALSE}
+# PRIMARY_DGN 
+
+# 1 = "Cancer"
+# 2 = "~Congenital Heart Disease~"
+# 3 = "Coronary Artery Disease"
+# 4 = "Dilated Myopathy: Adriamycin"
+# 5 = "Dilated Myopathy: Alcoholic"
+# 6 = "Dilated Myopathy: Familial"
+# 7 = "Dilated Myopathy: Idiopathic"
+# 8 = "Dilated Myopathy: Ischemic"
+# 9 = "Dilated Myopathy: Myocarditis"
+# 10 = "Dilated Myopathy: Other Specify"
+# 11 = "Dilated Myopathy: Post partum"
+# 12 = "Dilated Myopathy: Viral"
+# 13 = "Hypertrophic Cardiomyopathy"
+# 14 = "Restrictive Myopathy: Amyloidosis"
+# 15 = "Restrictive Myopathy: Endocardial Fibrosis"
+# 16 = "Restrictive Myopathy: Idiopathic"
+# 17 = "Restrictive Myopathy: Other specify"
+# 18 = "Restrictive Myopathy: Sarcoidosis"
+# 19 = "Restrictive Myopathy: Sec to Radiation/Chemotherapy"
+# 20 = "Valvular Heart Disease"
+# 21 = "#None#"
+# 51 = "#Congenital Heart Disease:  Biventricular:  CAVC/VSD/ASD#"
+# 52 = "#Congenital Heart Disease:  Biventricular:  Congenitally Corrected Transposition (I-TGA)(CC-TGA)#"
+# 53 = "#Congenital Heart Disease:  Biventricular:  Ebsteins Anomaly#"
+# 54 = "#Congenital Heart Disease:  Biventricular:  Kawasaki Disease#"
+# 55 = "#Congenital Heart Disease:  Biventricular:  Left Heart Valve/Structural Hypoplasia#"
+# 56 = "#Congenital Heart Disease:  Biventricular:  TOF/TOF Variant#"
+# 57 = "#Congenital Heart Disease:  Biventricular:  Transposition of the Great Arteries (d-TGA)#"
+# 58 = "#Congenital Heart Disease:  Biventricular:  Truncus Arteriosus#"
+# 59 = "#Congenital Heart Disease:  Single Ventricle:  Heterotaxy/Complex CAVC#"
+# 60 = "#Congenital Heart Disease:  Single Ventricle:  Hypoplastic Left Heart#"
+# 61 = "#Congenital Heart Disease:  Single Ventricle:  Other#"
+# 62 = "#Congenital Heart Disease:  Single Ventricle:  Pulmonary Atresia with IVS#"
+# 63 = "#Congenital Heart Disease:  Single Ventricle:  Pulmonary Atresia with IVS (RVDC)#"
+# 64 = "#Congenital Heart Disease:  Single Ventricle:  Unspecified#"
+# 998 = "Unknown";
+
+```
+
